@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getPublicSupabaseClient } from "@/lib/supabase/public";
 
 type SourceClass =
   | "Institutional reporting"
@@ -22,7 +23,28 @@ type SourceRef = {
   hasPhotos?: boolean;
 };
 
-const sources: SourceRef[] = [
+type TimelineEvent = {
+  date: string;
+  title: string;
+  body: string;
+  evidence: EvidenceLevel;
+  sources: string[];
+  zone: "PAST" | "NOW" | "NEXT";
+};
+
+type PublicRecordBundle = {
+  project: {
+    code: string;
+    title: string;
+    status: string;
+    lastOfficialUpdate: string | null;
+  };
+  sources: SourceRef[];
+  timeline: TimelineEvent[];
+  fields: Field[];
+};
+
+const fallbackSources: SourceRef[] = [
   {
     id: "s1",
     title: "BWSSB restores Bannerghatta Main Road surface; DPR preparation reported",
@@ -108,7 +130,7 @@ const sources: SourceRef[] = [
   },
 ];
 
-const timeline = [
+const fallbackTimeline: TimelineEvent[] = [
   {
     date: "8 APR 2026",
     title: "First located official intervention",
@@ -183,7 +205,7 @@ type Field = {
   detail: string;
 };
 
-const fields: Field[] = [
+const fallbackFields: Field[] = [
   {
     group: "Identity & ownership",
     field: "Working project title",
@@ -366,12 +388,12 @@ function EvidenceTag({ status }: { status: EvidenceLevel }) {
   return <span className={item.className}>{item.label}</span>;
 }
 
-function SourceLinks({ ids }: { ids: string[] }) {
+function SourceLinks({ ids, sourceList }: { ids: string[]; sourceList: SourceRef[] }) {
   if (!ids.length) return <span className="muted">No source located</span>;
   return (
     <span className="source-inline">
       {ids.map((id, index) => {
-        const source = sources.find((item) => item.id === id);
+        const source = sourceList.find((item) => item.id === id);
         if (!source) return null;
         return (
           <span key={id}>
@@ -387,18 +409,62 @@ function SourceLinks({ ids }: { ids: string[] }) {
 }
 
 export default function Home() {
+  const [sources, setSources] = useState<SourceRef[]>(fallbackSources);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>(fallbackTimeline);
+  const [fields, setFields] = useState<Field[]>(fallbackFields);
+  const [dataOrigin, setDataOrigin] = useState<"loading" | "live" | "fallback">(() =>
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+      ? "loading"
+      : "fallback",
+  );
   const [timelineFilter, setTimelineFilter] = useState<"all" | EvidenceLevel>("all");
   const [dataFilter, setDataFilter] = useState<"all" | "available" | "missing">("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceClass>("all");
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    const client = getPublicSupabaseClient();
+
+    if (!client) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void client
+      .rpc("get_nagara_public_record", { p_project_code: "NAG-BAN-001" })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error || !data || typeof data !== "object") {
+          setDataOrigin("fallback");
+          return;
+        }
+
+        const record = data as unknown as Partial<PublicRecordBundle>;
+        if (!Array.isArray(record.sources) || !Array.isArray(record.timeline) || !Array.isArray(record.fields)) {
+          setDataOrigin("fallback");
+          return;
+        }
+
+        setSources(record.sources);
+        setTimeline(record.timeline);
+        setFields(record.fields);
+        setDataOrigin("live");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const visibleTimeline = useMemo(
     () =>
       timelineFilter === "all"
         ? timeline
         : timeline.filter((item) => item.evidence === timelineFilter),
-    [timelineFilter],
+    [timeline, timelineFilter],
   );
 
   const visibleFields = useMemo(
@@ -408,7 +474,7 @@ export default function Home() {
         if (dataFilter === "missing") return item.status === "missing";
         return true;
       }),
-    [dataFilter],
+    [dataFilter, fields],
   );
 
   const fieldGroups = useMemo(() => {
@@ -424,8 +490,11 @@ export default function Home() {
       sourceFilter === "all"
         ? sources
         : sources.filter((source) => source.sourceClass === sourceFilter),
-    [sourceFilter],
+    [sourceFilter, sources],
   );
+
+  const availableFieldCount = fields.filter((field) => field.status !== "missing").length;
+  const missingFieldCount = fields.filter((field) => field.status === "missing").length;
 
   const copyLink = async () => {
     try {
@@ -609,7 +678,7 @@ export default function Home() {
                     <strong>{event.date}</strong>
                   </div>
                   <div className="timeline-content">
-                    <div className="event-topline"><EvidenceTag status={event.evidence} /><SourceLinks ids={event.sources} /></div>
+                    <div className="event-topline"><EvidenceTag status={event.evidence} /><SourceLinks ids={event.sources} sourceList={sources} /></div>
                     <h3>{event.title}</h3>
                     <p>{event.body}</p>
                   </div>
@@ -633,14 +702,14 @@ export default function Home() {
             <h2>Every field has a source — or a visible gap.</h2>
           </div>
           <div className="record-status">
-            <span>RESEARCH SNAPSHOT</span>
-            <strong>16 SEP 2026</strong>
+            <span>{dataOrigin === "live" ? "LIVE DATABASE RECORD" : dataOrigin === "loading" ? "CONNECTING TO RECORD" : "RESEARCH SNAPSHOT"}</span>
+            <strong>19 SEP 2026</strong>
           </div>
         </div>
 
         <div className="record-scoreboard">
-          <div><span>IDENTIFIED</span><strong>7</strong><small>project facts with evidence</small></div>
-          <div><span>OPEN GAPS</span><strong>10</strong><small>fields not publicly located</small></div>
+          <div><span>IDENTIFIED</span><strong>{availableFieldCount}</strong><small>project facts with evidence</small></div>
+          <div><span>OPEN GAPS</span><strong>{missingFieldCount}</strong><small>fields not publicly located</small></div>
           <div><span>ASSUMPTIONS</span><strong>0</strong><small>never substituted for evidence</small></div>
           <div><span>DATASETS CHECKED</span><strong>2</strong><small>public procurement trail + B-RIGHT comparison</small></div>
         </div>
@@ -681,7 +750,7 @@ export default function Home() {
                     >
                       <span className="field-name">{field.field}</span>
                       <span className="field-value">{field.value}</span>
-                      <span className="field-proof"><EvidenceTag status={field.status} /><SourceLinks ids={field.sourceIds} /></span>
+                      <span className="field-proof"><EvidenceTag status={field.status} /><SourceLinks ids={field.sourceIds} sourceList={sources} /></span>
                       <span className="field-chevron" aria-hidden="true">{isExpanded ? "−" : "+"}</span>
                       {isExpanded && <span className="field-detail">{field.detail}</span>}
                     </button>

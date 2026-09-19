@@ -21,7 +21,7 @@ This first public demonstration follows authority-led excavation and restoration
 
 ## Prerequisites
 
-- Node.js `>=20`
+- Node.js `>=22`
 
 ## Quick Start
 
@@ -32,11 +32,20 @@ npm run build
 npm test
 ```
 
+Create `.env.local` for local development:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+```
+
+Only the Supabase publishable key is used in the browser. Public access is restricted by row-level security; service-role credentials must never be added to this application.
+
 ## Data layer
 
-The normalized Supabase/Postgres schema is in [`supabase/migrations/0001_nagara_core.sql`](supabase/migrations/0001_nagara_core.sql). It covers road segments, projects, agencies, contractors, deadlines, events, sources, verification, future works, road-cutting permissions, financial records, official updates, citizen evidence, and revision history.
+The normalized Supabase/Postgres schema begins in [`supabase/migrations/0001_nagara_core.sql`](supabase/migrations/0001_nagara_core.sql). The additive Road Memory and public-record layer is in [`supabase/migrations/0002_bannerghatta_beta_record.sql`](supabase/migrations/0002_bannerghatta_beta_record.sql). It covers road segments, projects, agencies, contractors, deadlines, events, sources, verification, future works, road-cutting permissions, financial records, official updates, citizen evidence, and revision history.
 
-The current site uses a carefully sourced static demonstration record. Connecting the interface to Supabase is the next implementation stage.
+[`supabase/seed_bannerghatta_beta.sql`](supabase/seed_bannerghatta_beta.sql) is the idempotent Beta v1 data import. The site reads the published `NAG-BAN-001` record through the RLS-protected `get_nagara_public_record` RPC. A local static copy remains only as a continuity fallback if the public database is temporarily unreachable.
 
 ## Verification boundary
 

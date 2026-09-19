@@ -1,264 +1,247 @@
--- Nagara v1 — evidence-led project records for Supabase/Postgres
--- Run in the Supabase SQL editor or as a migration.  This schema deliberately
--- separates claims, source documents and verification from public display fields.
+-- Nagara production baseline.
+-- Public records are readable only after editorial review; browser clients
+-- receive SELECT access but no direct write access.
 
 create extension if not exists pgcrypto;
 
-create type public.nagara_source_class as enum (
-  'primary_document',
-  'official_communication',
-  'institutional_submission',
-  'journalism',
-  'citizen_evidence',
-  'dataset_coverage'
+create type public.review_state as enum (
+  'draft', 'pending_review', 'published', 'disputed', 'archived'
 );
-
-create type public.nagara_verification_status as enum (
-  'verified_primary',
-  'verified_institutional',
-  'supported_secondary',
-  'citizen_reported',
-  'not_published',
-  'superseded',
-  'disputed'
+create type public.project_status as enum (
+  'planned', 'active', 'delayed', 'paused', 'partial_restoration',
+  'restoration', 'completed', 'unknown'
 );
-
-create type public.nagara_project_status as enum (
-  'proposed', 'planned', 'tendered', 'ongoing', 'delayed', 'restoration_pending', 'completed', 'unknown'
+create type public.restoration_status as enum (
+  'not_started', 'temporary', 'partial', 'permanent', 'verified', 'unknown'
 );
-
-create type public.nagara_event_type as enum (
-  'work_started', 'inspection', 'deadline_announced', 'deadline_revised',
-  'work_paused', 'work_resumed', 'road_cutting', 'restoration_started',
-  'restoration_completed', 'official_update', 'citizen_observation', 'other'
+create type public.agency_role as enum (
+  'lead', 'utility_executor', 'road_authority', 'project_partner',
+  'funder', 'contractor', 'traffic_management'
 );
+create type public.source_kind as enum (
+  'official_update', 'tender_or_contract', 'news_report',
+  'field_verification', 'resident_submission', 'other'
+);
+create type public.update_kind as enum (
+  'commencement', 'deadline', 'deadline_revision', 'delay', 'dependency',
+  'restoration', 'inspection', 'closure', 'other'
+);
+create type public.dependency_status as enum ('active', 'cleared', 'unclear');
+create type public.report_category as enum (
+  'pothole', 'excavation', 'drainage', 'footpath', 'signage',
+  'lane_marking', 'obstruction', 'unsafe_access', 'other'
+);
+create type public.report_state as enum ('pending', 'published', 'rejected', 'archived');
+create type public.asset_state as enum ('pending_review', 'redacted', 'published', 'removed');
 
 create table public.agencies (
   id uuid primary key default gen_random_uuid(),
-  name text not null unique,
-  acronym text,
-  agency_type text,
-  official_url text,
-  created_at timestamptz not null default now()
-);
-
-create table public.contractors (
-  id uuid primary key default gen_random_uuid(),
-  legal_name text not null unique,
-  aliases text[] not null default '{}',
-  registration_number text,
-  official_url text,
-  created_at timestamptz not null default now()
+  slug text not null unique check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+  name text not null unique check (char_length(name) between 2 and 180),
+  acronym text unique check (acronym is null or char_length(acronym) between 2 and 20),
+  agency_type text not null default 'public_authority'
+    check (agency_type in ('public_authority','utility_agency','metro_or_transit','contractor','other')),
+  website_url text check (website_url is null or website_url ~ '^https?://'),
+  description text check (description is null or char_length(description) <= 1000),
+  review_status public.review_state not null default 'draft',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.road_segments (
   id uuid primary key default gen_random_uuid(),
-  road_segment_id text not null unique,
-  road_name text not null,
-  from_landmark text,
-  to_landmark text,
+  slug text not null unique check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+  name text not null check (char_length(name) between 3 and 180),
   locality text,
-  authority_road_id text,
-  geometry jsonb,
-  active boolean not null default true,
+  city text not null default 'Bengaluru',
+  corridor_description text check (corridor_description is null or char_length(corridor_description) <= 2000),
+  route_geojson jsonb check (
+    route_geojson is null or (
+      jsonb_typeof(route_geojson) = 'object' and route_geojson ? 'type'
+      and route_geojson ->> 'type' in ('LineString','MultiLineString')
+    )
+  ),
+  centre_latitude numeric,
+  centre_longitude numeric,
+  road_owner_agency_id uuid references public.agencies(id) on delete set null,
+  review_status public.review_state not null default 'draft',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create table public.projects (
   id uuid primary key default gen_random_uuid(),
-  project_id text not null unique,
-  title text not null,
-  description text,
-  project_type text,
-  status public.nagara_project_status not null default 'unknown',
-  agency_id uuid references public.agencies(id),
-  contractor_id uuid references public.contractors(id),
-  tender_id text,
-  work_order text,
-  start_date date,
-  original_deadline date,
-  restoration_date date,
-  sanctioned_amount numeric(16,2),
-  contract_value numeric(16,2),
-  expenditure_reported numeric(16,2),
-  approving_authority text,
-  public_summary text,
+  project_code text not null unique check (project_code ~ '^[A-Z0-9][A-Z0-9-]{2,31}$'),
+  slug text not null unique check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+  title text not null check (char_length(title) between 5 and 180),
+  work_type text not null check (char_length(work_type) between 3 and 100),
+  work_description text not null check (char_length(work_description) between 30 and 5000),
+  status public.project_status not null default 'unknown',
+  work_started_on date,
+  original_completion_on date,
+  current_expected_completion_on date,
+  restoration_status public.restoration_status not null default 'unknown',
+  timeline_note text check (timeline_note is null or char_length(timeline_note) <= 2000),
+  latest_official_update_on date,
+  review_status public.review_state not null default 'draft',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table public.project_road_segments (
+create table public.project_segments (
   project_id uuid not null references public.projects(id) on delete cascade,
-  road_segment_id uuid not null references public.road_segments(id) on delete restrict,
-  relationship text not null default 'primary',
+  road_segment_id uuid not null references public.road_segments(id) on delete cascade,
+  impact_note text check (impact_note is null or char_length(impact_note) <= 1000),
   primary key (project_id, road_segment_id)
 );
 
-create table public.source_documents (
+create table public.project_agencies (
+  project_id uuid not null references public.projects(id) on delete cascade,
+  agency_id uuid not null references public.agencies(id) on delete cascade,
+  role public.agency_role not null,
+  responsibility_note text check (responsibility_note is null or char_length(responsibility_note) <= 1500),
+  started_on date,
+  ended_on date,
+  primary key (project_id, agency_id, role)
+);
+
+create table public.sources (
   id uuid primary key default gen_random_uuid(),
-  source_id text not null unique,
-  title text not null,
-  publisher text not null,
+  source_kind public.source_kind not null,
+  publisher text not null check (char_length(publisher) between 2 and 180),
+  title text not null check (char_length(title) between 5 and 500),
+  canonical_url text not null unique check (canonical_url ~ '^https?://'),
   published_on date,
-  source_url text not null,
-  archived_url text,
-  source_class public.nagara_source_class not null,
-  excerpt text,
-  checksum text,
-  submitted_by uuid references auth.users(id),
-  created_at timestamptz not null default now()
-);
-
-create table public.project_claims (
-  id uuid primary key default gen_random_uuid(),
-  project_id uuid not null references public.projects(id) on delete cascade,
-  claim_key text not null,
-  claim_value jsonb not null,
-  display_value text not null,
-  verification_status public.nagara_verification_status not null default 'citizen_reported',
-  valid_from date,
-  valid_to date,
-  supersedes_claim_id uuid references public.project_claims(id),
-  is_current boolean not null default true,
-  note text,
+  accessed_on date not null default current_date,
+  source_note text check (source_note is null or char_length(source_note) <= 2000),
+  review_status public.review_state not null default 'draft',
   created_at timestamptz not null default now(),
-  unique (project_id, claim_key, created_at)
+  updated_at timestamptz not null default now()
 );
 
-create table public.claim_sources (
-  claim_id uuid not null references public.project_claims(id) on delete cascade,
-  source_document_id uuid not null references public.source_documents(id) on delete cascade,
-  source_locator text,
-  primary key (claim_id, source_document_id)
+create table public.project_sources (
+  project_id uuid not null references public.projects(id) on delete cascade,
+  source_id uuid not null references public.sources(id) on delete cascade,
+  claim_summary text not null check (char_length(claim_summary) between 20 and 1500),
+  source_locator text check (source_locator is null or char_length(source_locator) <= 300),
+  primary key (project_id, source_id)
 );
 
-create table public.verification_records (
-  id uuid primary key default gen_random_uuid(),
-  claim_id uuid not null references public.project_claims(id) on delete cascade,
-  verification_status public.nagara_verification_status not null,
-  verified_by uuid references auth.users(id),
-  method text not null,
-  rationale text,
-  verified_at timestamptz not null default now()
-);
-
-create table public.project_events (
+create table public.project_updates (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
-  event_type public.nagara_event_type not null,
-  event_date date,
-  title text not null,
-  description text,
-  verification_status public.nagara_verification_status not null default 'citizen_reported',
-  created_at timestamptz not null default now()
+  source_id uuid references public.sources(id) on delete set null,
+  kind public.update_kind not null,
+  occurred_on date not null,
+  title text not null check (char_length(title) between 5 and 220),
+  detail text not null check (char_length(detail) between 20 and 5000),
+  deadline_before date,
+  deadline_after date,
+  delay_reason text check (delay_reason is null or char_length(delay_reason) <= 2000),
+  is_official boolean not null default false,
+  review_status public.review_state not null default 'draft',
+  published_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-create table public.project_event_sources (
-  project_event_id uuid not null references public.project_events(id) on delete cascade,
-  source_document_id uuid not null references public.source_documents(id) on delete cascade,
-  primary key (project_event_id, source_document_id)
-);
-
-create table public.project_deadlines (
+create table public.project_dependencies (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
-  deadline_date date not null,
-  deadline_kind text not null check (deadline_kind in ('original_contractual', 'revised_contractual', 'public_direction', 'estimated')),
-  status text not null default 'active' check (status in ('active', 'met', 'missed', 'superseded', 'unknown')),
-  reason_for_change text,
-  source_document_id uuid references public.source_documents(id),
-  created_at timestamptz not null default now()
+  depends_on_project_id uuid references public.projects(id) on delete set null,
+  depends_on_agency_id uuid references public.agencies(id) on delete set null,
+  source_id uuid references public.sources(id) on delete set null,
+  description text not null check (char_length(description) between 20 and 2000),
+  status public.dependency_status not null default 'unclear',
+  review_status public.review_state not null default 'draft',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-create table public.future_works (
+create table public.resident_reports (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid references public.projects(id) on delete set null,
-  road_segment_id uuid not null references public.road_segments(id) on delete cascade,
-  future_work text not null,
-  agency_id uuid references public.agencies(id),
-  contractor_id uuid references public.contractors(id),
-  tender_id text,
-  work_order text,
-  expected_start_date date,
-  expected_end_date date,
-  road_cutting_permission text,
-  confidence text not null check (confidence in ('confirmed', 'planned', 'proposed', 'not_found')),
-  verification_status public.nagara_verification_status not null default 'not_published',
-  source_document_id uuid references public.source_documents(id),
-  notes text,
-  created_at timestamptz not null default now()
-);
-
-create table public.citizen_evidence (
-  id uuid primary key default gen_random_uuid(),
-  project_id uuid references public.projects(id) on delete set null,
   road_segment_id uuid references public.road_segments(id) on delete set null,
-  observed_at timestamptz,
-  observation text not null,
-  latitude numeric(9,6),
-  longitude numeric(9,6),
-  media_url text,
-  consent_to_publish boolean not null default false,
-  moderation_status text not null default 'pending' check (moderation_status in ('pending', 'published', 'rejected')),
-  submitted_by uuid references auth.users(id),
-  created_at timestamptz not null default now()
+  project_id uuid references public.projects(id) on delete set null,
+  category public.report_category not null,
+  description text not null check (char_length(btrim(description)) between 20 and 1500),
+  severity smallint not null default 3 check (severity between 1 and 5),
+  observed_at timestamptz not null default now(),
+  latitude numeric,
+  longitude numeric,
+  moderation_state public.report_state not null default 'pending',
+  moderation_note text check (moderation_note is null or char_length(moderation_note) <= 1000),
+  published_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-create table public.field_availability (
+create table public.evidence_assets (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid not null references public.projects(id) on delete cascade,
-  field_name text not null,
-  availability public.nagara_verification_status not null default 'not_published',
-  explanation text not null,
-  last_checked_at timestamptz not null default now(),
-  source_document_id uuid references public.source_documents(id),
-  unique (project_id, field_name)
+  project_update_id uuid references public.project_updates(id) on delete set null,
+  resident_report_id uuid references public.resident_reports(id) on delete set null,
+  bucket_id text not null check (bucket_id in ('nagara-pending-evidence','nagara-public-evidence')),
+  object_path text not null check (char_length(object_path) between 3 and 1024),
+  mime_type text not null check (mime_type in ('image/jpeg','image/png','image/webp','application/pdf')),
+  alt_text text check (alt_text is null or char_length(alt_text) <= 300),
+  asset_status public.asset_state not null default 'pending_review',
+  captured_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-create index projects_agency_idx on public.projects(agency_id);
-create index projects_contractor_idx on public.projects(contractor_id);
-create index project_claims_project_current_idx on public.project_claims(project_id, is_current);
-create index project_events_project_date_idx on public.project_events(project_id, event_date desc);
-create index project_deadlines_project_date_idx on public.project_deadlines(project_id, deadline_date);
-create index future_works_segment_idx on public.future_works(road_segment_id, expected_start_date);
-create index source_documents_class_idx on public.source_documents(source_class);
+create index road_segments_review_status_idx on public.road_segments(review_status);
+create index project_segments_road_segment_idx on public.project_segments(road_segment_id);
+create index project_agencies_agency_idx on public.project_agencies(agency_id);
+create index project_updates_project_date_idx on public.project_updates(project_id, occurred_on desc);
+create index resident_reports_moderation_idx on public.resident_reports(moderation_state, observed_at desc);
+create index resident_reports_project_idx on public.resident_reports(project_id);
+create index evidence_assets_public_idx on public.evidence_assets(asset_status);
 
--- RLS-ready public read model.  Anonymous users can inspect published records;
--- direct public writes are forbidden. Create server/admin workflows or an
--- authenticated review queue before allowing submissions.
 alter table public.agencies enable row level security;
-alter table public.contractors enable row level security;
 alter table public.road_segments enable row level security;
 alter table public.projects enable row level security;
-alter table public.project_road_segments enable row level security;
-alter table public.source_documents enable row level security;
-alter table public.project_claims enable row level security;
-alter table public.claim_sources enable row level security;
-alter table public.verification_records enable row level security;
-alter table public.project_events enable row level security;
-alter table public.project_event_sources enable row level security;
-alter table public.project_deadlines enable row level security;
-alter table public.future_works enable row level security;
-alter table public.citizen_evidence enable row level security;
-alter table public.field_availability enable row level security;
+alter table public.project_segments enable row level security;
+alter table public.project_agencies enable row level security;
+alter table public.sources enable row level security;
+alter table public.project_sources enable row level security;
+alter table public.project_updates enable row level security;
+alter table public.project_dependencies enable row level security;
+alter table public.resident_reports enable row level security;
+alter table public.evidence_assets enable row level security;
 
-create policy "public can read agencies" on public.agencies for select using (true);
-create policy "public can read contractors" on public.contractors for select using (true);
-create policy "public can read road segments" on public.road_segments for select using (true);
-create policy "public can read projects" on public.projects for select using (true);
-create policy "public can read project road segments" on public.project_road_segments for select using (true);
-create policy "public can read source documents" on public.source_documents for select using (true);
-create policy "public can read project claims" on public.project_claims for select using (true);
-create policy "public can read claim sources" on public.claim_sources for select using (true);
-create policy "public can read verification records" on public.verification_records for select using (true);
-create policy "public can read project events" on public.project_events for select using (true);
-create policy "public can read project event sources" on public.project_event_sources for select using (true);
-create policy "public can read project deadlines" on public.project_deadlines for select using (true);
-create policy "public can read future works" on public.future_works for select using (true);
-create policy "public can read published citizen evidence" on public.citizen_evidence for select using (moderation_status = 'published');
-create policy "public can read field availability" on public.field_availability for select using (true);
+create policy "Published agencies are public" on public.agencies
+  for select to anon, authenticated using (review_status = 'published');
+create policy "Published road segments are public" on public.road_segments
+  for select to anon, authenticated using (review_status = 'published');
+create policy "Published projects are public" on public.projects
+  for select to anon, authenticated using (review_status = 'published');
+create policy "Segments for published projects are public" on public.project_segments
+  for select to anon, authenticated using (
+    exists (select 1 from public.projects p where p.id = project_id and p.review_status = 'published')
+    and exists (select 1 from public.road_segments r where r.id = road_segment_id and r.review_status = 'published')
+  );
+create policy "Agencies for published projects are public" on public.project_agencies
+  for select to anon, authenticated using (
+    exists (select 1 from public.projects p where p.id = project_id and p.review_status = 'published')
+    and exists (select 1 from public.agencies a where a.id = agency_id and a.review_status = 'published')
+  );
+create policy "Published sources are public" on public.sources
+  for select to anon, authenticated using (review_status = 'published');
+create policy "Sources for published projects are public" on public.project_sources
+  for select to anon, authenticated using (
+    exists (select 1 from public.projects p where p.id = project_id and p.review_status = 'published')
+    and exists (select 1 from public.sources s where s.id = source_id and s.review_status = 'published')
+  );
+create policy "Published updates are public" on public.project_updates
+  for select to anon, authenticated using (review_status = 'published');
+create policy "Published dependencies are public" on public.project_dependencies
+  for select to anon, authenticated using (review_status = 'published');
+create policy "Published resident reports are public" on public.resident_reports
+  for select to anon, authenticated using (moderation_state = 'published');
+create policy "Published evidence assets are public" on public.evidence_assets
+  for select to anon, authenticated using (asset_status = 'published');
 
--- Add privileged write policies only after creating a reviewer/admin role.
--- Use the Supabase service role in a server route for source ingestion; never
--- expose that key in browser code.
+grant select on public.agencies, public.road_segments, public.projects,
+  public.project_segments, public.project_agencies, public.sources,
+  public.project_sources, public.project_updates, public.project_dependencies,
+  public.resident_reports, public.evidence_assets to anon, authenticated;
