@@ -17,6 +17,9 @@ test("ships Nagara's four-part public record", async () => {
   assert.match(page, /PROJECT RECORD/);
   assert.match(page, /DATA VERIFICATION/);
   assert.match(page, /Not published/);
+  assert.match(page, /\.from\("projects"\)/);
+  assert.match(page, /p_project_code: selectedProjectCode/);
+  assert.match(page, /Bannerghatta Road project register/);
   assert.match(schema, /create table public\.road_segments/i);
   assert.match(schema, /create table public\.projects/i);
   assert.match(schema, /enable row level security/i);

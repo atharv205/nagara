@@ -3,12 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getPublicSupabaseClient } from "@/lib/supabase/public";
 
-type SourceClass =
-  | "Institutional reporting"
-  | "Investigative reporting"
-  | "Procurement mirror"
-  | "Citizen evidence"
-  | "Dataset coverage";
+type SourceClass = string;
 
 type EvidenceLevel = "supported" | "reported" | "citizen" | "missing";
 
@@ -42,6 +37,32 @@ type PublicRecordBundle = {
   sources: SourceRef[];
   timeline: TimelineEvent[];
   fields: Field[];
+};
+
+type ProjectIndexItem = {
+  project_code: string;
+  slug: string;
+  title: string;
+  work_type: string;
+  work_description: string;
+  status: string;
+  restoration_status: string;
+  latest_official_update_on: string | null;
+  timeline_note: string | null;
+};
+
+const fallbackProject: ProjectIndexItem = {
+  project_code: "NAG-BAN-001",
+  slug: "bannerghatta-road-utility-works-restoration",
+  title: "BWSSB sewer-pipeline work and road restoration — Bannerghatta Road",
+  work_type: "Sewer pipeline excavation and associated road restoration",
+  work_description:
+    "A public record of BWSSB sewer-pipeline excavation, partial restoration, official completion directions and later excavation reports along the Vega City–IIMB/Fortis–Arekere corridor.",
+  status: "partial_restoration",
+  restoration_status: "partial",
+  latest_official_update_on: "2026-05-31",
+  timeline_note:
+    "The matched BWSSB tender, work order, contractor, original deadline, project value and later road-cutting permission remain unavailable in the public record reviewed.",
 };
 
 const fallbackSources: SourceRef[] = [
@@ -409,6 +430,14 @@ function SourceLinks({ ids, sourceList }: { ids: string[]; sourceList: SourceRef
 }
 
 export default function Home() {
+  const [projectIndex, setProjectIndex] = useState<ProjectIndexItem[]>([fallbackProject]);
+  const [selectedProjectCode, setSelectedProjectCode] = useState(fallbackProject.project_code);
+  const [recordProject, setRecordProject] = useState<PublicRecordBundle["project"]>({
+    code: fallbackProject.project_code,
+    title: fallbackProject.title,
+    status: fallbackProject.status,
+    lastOfficialUpdate: fallbackProject.latest_official_update_on,
+  });
   const [sources, setSources] = useState<SourceRef[]>(fallbackSources);
   const [timeline, setTimeline] = useState<TimelineEvent[]>(fallbackTimeline);
   const [fields, setFields] = useState<Field[]>(fallbackFields);
@@ -422,6 +451,7 @@ export default function Home() {
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceClass>("all");
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -434,30 +464,114 @@ export default function Home() {
     }
 
     void client
-      .rpc("get_nagara_public_record", { p_project_code: "NAG-BAN-001" })
+      .from("projects")
+      .select(
+        "project_code,slug,title,work_type,work_description,status,restoration_status,latest_official_update_on,timeline_note",
+      )
+      .eq("review_status", "published")
+      .like("project_code", "NAG-BAN-%")
+      .order("project_code", { ascending: true })
       .then(({ data, error }) => {
-        if (!active) return;
-        if (error || !data || typeof data !== "object") {
-          setDataOrigin("fallback");
-          return;
-        }
+        if (!active || error || !data?.length) return;
 
-        const record = data as unknown as Partial<PublicRecordBundle>;
-        if (!Array.isArray(record.sources) || !Array.isArray(record.timeline) || !Array.isArray(record.fields)) {
-          setDataOrigin("fallback");
-          return;
-        }
+        const publishedProjects = data as ProjectIndexItem[];
+        setProjectIndex(publishedProjects);
 
-        setSources(record.sources);
-        setTimeline(record.timeline);
-        setFields(record.fields);
-        setDataOrigin("live");
+        const requestedProject = new URLSearchParams(window.location.search).get("project");
+        const requestedMatch = publishedProjects.find(
+          (project) =>
+            project.project_code.toLowerCase() === requestedProject?.toLowerCase() ||
+            project.slug === requestedProject,
+        );
+
+        setDataOrigin("loading");
+        setDataError(null);
+        setExpandedField(null);
+        setSelectedProjectCode(requestedMatch?.project_code ?? publishedProjects[0].project_code);
       });
 
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const client = getPublicSupabaseClient();
+
+    if (!client) return () => { active = false; };
+
+    void client
+      .rpc("get_nagara_public_record", { p_project_code: selectedProjectCode })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error || !data || typeof data !== "object") {
+          if (selectedProjectCode === fallbackProject.project_code) {
+            setRecordProject({
+              code: fallbackProject.project_code,
+              title: fallbackProject.title,
+              status: fallbackProject.status,
+              lastOfficialUpdate: fallbackProject.latest_official_update_on,
+            });
+            setSources(fallbackSources);
+            setTimeline(fallbackTimeline);
+            setFields(fallbackFields);
+          } else {
+            setSources([]);
+            setTimeline([]);
+            setFields([]);
+          }
+          setDataOrigin("fallback");
+          setDataError("The live record could not be loaded. No database value has been replaced with a guess.");
+          return;
+        }
+
+        const record = data as unknown as Partial<PublicRecordBundle>;
+        if (
+          !record.project ||
+          !Array.isArray(record.sources) ||
+          !Array.isArray(record.timeline) ||
+          !Array.isArray(record.fields)
+        ) {
+          setDataOrigin("fallback");
+          setDataError("The live record returned an incomplete data structure.");
+          return;
+        }
+
+        setRecordProject(record.project);
+        setSources(record.sources);
+        setTimeline(record.timeline);
+        setFields(record.fields);
+        setSourceFilter("all");
+        setTimelineFilter("all");
+        setDataFilter("all");
+        setDataOrigin("live");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedProjectCode]);
+
+  useEffect(() => {
+    const handleHistoryChange = () => {
+      const requestedProject = new URLSearchParams(window.location.search).get("project");
+      const match = projectIndex.find(
+        (project) =>
+          project.project_code.toLowerCase() === requestedProject?.toLowerCase() ||
+          project.slug === requestedProject,
+      );
+      if (match) {
+        setDataOrigin("loading");
+        setDataError(null);
+        setExpandedField(null);
+        setSelectedProjectCode(match.project_code);
+      }
+    };
+
+    window.addEventListener("popstate", handleHistoryChange);
+    return () => window.removeEventListener("popstate", handleHistoryChange);
+  }, [projectIndex]);
 
   const visibleTimeline = useMemo(
     () =>
@@ -493,8 +607,47 @@ export default function Home() {
     [sourceFilter, sources],
   );
 
+  const sourceClasses = useMemo(
+    () => [...new Set(sources.map((source) => source.sourceClass))],
+    [sources],
+  );
+
+  const selectedProject = useMemo(
+    () =>
+      projectIndex.find((project) => project.project_code === selectedProjectCode) ??
+      fallbackProject,
+    [projectIndex, selectedProjectCode],
+  );
+
+  const missingFields = useMemo(
+    () => fields.filter((field) => field.status === "missing"),
+    [fields],
+  );
+
   const availableFieldCount = fields.filter((field) => field.status !== "missing").length;
   const missingFieldCount = fields.filter((field) => field.status === "missing").length;
+
+  const selectProject = (project: ProjectIndexItem) => {
+    setDataOrigin("loading");
+    setDataError(null);
+    setExpandedField(null);
+    setSelectedProjectCode(project.project_code);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("project", project.slug);
+    window.history.pushState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+  };
+
+  const formatStatus = (value: string) => value.replaceAll("_", " ").toUpperCase();
+
+  const formatRecordDate = (value: string | null) => {
+    if (!value) return "NO OFFICIAL UPDATE DATE";
+    const date = new Date(`${value}T00:00:00`);
+    return new Intl.DateTimeFormat("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(date).toUpperCase();
+  };
 
   const copyLink = async () => {
     try {
@@ -515,6 +668,7 @@ export default function Home() {
         </a>
         <nav aria-label="Page sections">
           <a href="#intro">01 / CASE</a>
+          <a href="#projects">PROJECTS</a>
           <a href="#history">02 / HISTORY</a>
           <a href="#record">03 / RECORD</a>
           <a href="#verification">04 / SOURCES</a>
@@ -554,17 +708,17 @@ export default function Home() {
             </div>
           </div>
           <aside className="case-note">
-            <p className="case-number">CASE 001</p>
-            <h2>Bannerghatta Road</h2>
-            <p className="route-name">Vega City → IIMB / Fortis → Arekere</p>
+            <p className="case-number">{recordProject.code}</p>
+            <h2>{recordProject.title}</h2>
+            <p className="route-name">{selectedProject.work_type}</p>
             <dl>
               <div>
-                <dt>WHAT WE CAN ESTABLISH</dt>
-                <dd>BWSSB sewer-pipeline work, partial restoration, public completion directions and renewed excavation reports.</dd>
+                <dt>CURRENT PUBLIC STATUS</dt>
+                <dd>{formatStatus(recordProject.status)}</dd>
               </div>
               <div>
-                <dt>WHAT IS STILL ABSENT</dt>
-                <dd>The matched work order, contractor, original deadline, project value and the August excavation’s permission.</dd>
+                <dt>WHAT THIS RECORD TRACKS</dt>
+                <dd>{selectedProject.work_description}</dd>
               </div>
             </dl>
           </aside>
@@ -574,6 +728,38 @@ export default function Home() {
           <span>PUBLIC WORK</span>
           <span>PUBLIC RECORD</span>
         </div>
+      </section>
+
+      <section id="projects" className="project-register" aria-labelledby="project-register-title">
+        <div className="register-heading">
+          <div>
+            <p className="eyebrow">LIVE FROM SUPABASE</p>
+            <h2 id="project-register-title">Bannerghatta Road project register</h2>
+          </div>
+          <p>
+            {projectIndex.length} published records. Choose one to load its timeline, project fields,
+            unresolved gaps and complete source trail from the database.
+          </p>
+        </div>
+        <div className="project-list" role="list" aria-label="Published Nagara projects">
+          {projectIndex.map((project) => (
+            <button
+              key={project.project_code}
+              className={project.project_code === selectedProjectCode ? "project-row active" : "project-row"}
+              type="button"
+              role="listitem"
+              aria-current={project.project_code === selectedProjectCode ? "true" : undefined}
+              onClick={() => selectProject(project)}
+            >
+              <span className="project-code">{project.project_code}</span>
+              <span className="project-name">{project.title}</span>
+              <span className="project-type">{project.work_type}</span>
+              <span className="project-state">{formatStatus(project.status)}</span>
+              <span className="project-arrow" aria-hidden="true">→</span>
+            </button>
+          ))}
+        </div>
+        {dataError && <p className="data-error" role="status">{dataError}</p>}
       </section>
 
       <section className="chapter why-chapter" aria-labelledby="why-title">
@@ -624,32 +810,26 @@ export default function Home() {
         <div className="chapter-label">02 — EXCAVATION HISTORY</div>
         <div className="section-intro">
           <div>
-            <p className="eyebrow">BWSSB SEWER-PIPELINE RECORD</p>
+            <p className="eyebrow">{recordProject.code} / {formatStatus(recordProject.status)}</p>
             <h2>What the public record can — and cannot — tell us.</h2>
           </div>
           <div className="history-summary">
-            <span className="route-badge">Vega City ↔ Arekere</span>
-            <p>
-              This is a focused record of authority excavation and its handoff to restoration. Generic local
-              maintenance is excluded unless it directly explains the work’s condition or dependency.
-            </p>
+            <span className="route-badge">{selectedProject.work_type}</span>
+            <p>{selectedProject.work_description}</p>
           </div>
         </div>
 
         <div className="history-layout">
-          <aside className="route-panel" aria-label="Road segment orientation">
-            <p className="section-kicker">CORRIDOR ORIENTATION</p>
-            <ol>
-              <li><span>01</span> Vega City Mall</li>
-              <li><span>02</span> Kalyani Choultry</li>
-              <li><span>03</span> IIMB / Fortis</li>
-              <li><span>04</span> Arekere Signal</li>
-              <li className="future-stop"><span>05</span> Hulimavu Metro <em>proposed next phase</em></li>
-            </ol>
-            <div className="route-legend">
-              <span><i className="line-solid" /> located public record</span>
-              <span><i className="line-dashed" /> future / unverified link</span>
-            </div>
+          <aside className="route-panel project-context" aria-label="Selected project context">
+            <p className="section-kicker">SELECTED PUBLIC RECORD</p>
+            <strong>{selectedProject.project_code}</strong>
+            <h3>{selectedProject.title}</h3>
+            <dl>
+              <div><dt>STATUS</dt><dd>{formatStatus(selectedProject.status)}</dd></div>
+              <div><dt>RESTORATION</dt><dd>{formatStatus(selectedProject.restoration_status)}</dd></div>
+              <div><dt>LAST OFFICIAL UPDATE</dt><dd>{formatRecordDate(selectedProject.latest_official_update_on)}</dd></div>
+            </dl>
+            <a href="#projects">CHANGE PROJECT ↑</a>
           </aside>
           <div className="timeline-area">
             <div className="filter-row" aria-label="Filter timeline evidence">
@@ -685,11 +865,7 @@ export default function Home() {
                 </article>
               ))}
             </div>
-            <p className="method-note">
-              <strong>Read this correctly:</strong> “within two days” is a reported public direction, not a
-              contractual baseline. The original contract schedule has not been located, so Nagara does not
-              manufacture one.
-            </p>
+            <p className="method-note"><strong>Record note:</strong> {selectedProject.timeline_note ?? "No additional timeline note has been published."}</p>
           </div>
         </div>
       </section>
@@ -698,12 +874,12 @@ export default function Home() {
         <div className="chapter-label">03 — PROJECT RECORD</div>
         <div className="record-title-row">
           <div>
-            <p className="eyebrow">CASE 001 / LIVE RESEARCH RECORD</p>
+            <p className="eyebrow">{recordProject.code} / LIVE RESEARCH RECORD</p>
             <h2>Every field has a source — or a visible gap.</h2>
           </div>
           <div className="record-status">
             <span>{dataOrigin === "live" ? "LIVE DATABASE RECORD" : dataOrigin === "loading" ? "CONNECTING TO RECORD" : "RESEARCH SNAPSHOT"}</span>
-            <strong>19 SEP 2026</strong>
+            <strong>{formatRecordDate(recordProject.lastOfficialUpdate)}</strong>
           </div>
         </div>
 
@@ -711,7 +887,7 @@ export default function Home() {
           <div><span>IDENTIFIED</span><strong>{availableFieldCount}</strong><small>project facts with evidence</small></div>
           <div><span>OPEN GAPS</span><strong>{missingFieldCount}</strong><small>fields not publicly located</small></div>
           <div><span>ASSUMPTIONS</span><strong>0</strong><small>never substituted for evidence</small></div>
-          <div><span>DATASETS CHECKED</span><strong>2</strong><small>public procurement trail + B-RIGHT comparison</small></div>
+          <div><span>SOURCES</span><strong>{sources.length}</strong><small>linked directly to this public record</small></div>
         </div>
 
         <div className="data-toolbar">
@@ -763,14 +939,14 @@ export default function Home() {
 
         <div className="coordination-watch">
           <div>
-            <p className="eyebrow">COORDINATION WATCH</p>
-            <h3>Was the new excavation already known before the road was restored?</h3>
+            <p className="eyebrow">OPEN RECORD QUESTIONS</p>
+            <h3>What remains unresolved for this project?</h3>
           </div>
           <div className="watch-outcome">
-            <EvidenceTag status="missing" />
+            <EvidenceTag status={missingFieldCount > 0 ? "missing" : "supported"} />
             <p>
-              <strong>Unknown.</strong> No matched tender, work order or accessible road-cutting permission was
-              located for the August excavation. A gap in the public record is not evidence of a coordination failure.
+              <strong>{missingFieldCount} fields remain open.</strong>{" "}
+              {selectedProject.timeline_note ?? "The available record does not contain a published explanation for every project field."}
             </p>
           </div>
         </div>
@@ -799,7 +975,7 @@ export default function Home() {
         <div className="source-toolbar">
           <p>FILTER SOURCE LIBRARY</p>
           <div>
-            {(["all", "Institutional reporting", "Investigative reporting", "Procurement mirror", "Citizen evidence", "Dataset coverage"] as const).map((value) => (
+            {(["all", ...sourceClasses] as const).map((value) => (
               <button
                 key={value}
                 className={sourceFilter === value ? "filter active" : "filter"}
@@ -834,11 +1010,9 @@ export default function Home() {
             <h3>What this research could not verify.</h3>
           </div>
           <div className="gaps-list">
-            <p><strong>Contractor, tender and work order:</strong> no matching BWSSB package was located. The related BSCC tender is deliberately kept separate.</p>
-            <p><strong>Original deadline and delay explanation:</strong> public reporting contains a May completion direction, but no underlying contractual schedule or formal delay explanation was found.</p>
-            <p><strong>Payments and project value:</strong> no project-level BWSSB financial record was found in the accessible source trail.</p>
-            <p><strong>Road-cutting permission for August:</strong> no matching permission document was located; GBA/BBMP public interfaces were unavailable during research. This does not prove that permission does not exist.</p>
-            <p><strong>BNP / B-RIGHT comparison:</strong> no matching sewer-package record was located in its public portal; its stated dataset is centred on BBMP ward-level projects rather than a complete all-agency project register.</p>
+            {missingFields.length ? missingFields.map((field) => (
+              <p key={`${field.group}-${field.field}`}><strong>{field.field}:</strong> {field.detail}</p>
+            )) : <p><strong>No open fields:</strong> every currently tracked field has published supporting evidence.</p>}
           </div>
         </div>
 
@@ -851,7 +1025,7 @@ export default function Home() {
 
       <footer>
         <div className="footer-wordmark"><span lang="kn">ನಗರ</span> NAGARA</div>
-        <p>Case 001 is an evidence-led prototype. A source-linked public record, not a final administrative finding.</p>
+        <p>{recordProject.code} is an evidence-led public record, not a final administrative finding.</p>
         <a href="#intro">BACK TO TOP ↑</a>
       </footer>
     </main>

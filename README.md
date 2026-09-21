@@ -45,7 +45,9 @@ Only the Supabase publishable key is used in the browser. Public access is restr
 
 The normalized Supabase/Postgres schema begins in [`supabase/migrations/0001_nagara_core.sql`](supabase/migrations/0001_nagara_core.sql). The additive Road Memory and public-record layer is in [`supabase/migrations/0002_bannerghatta_beta_record.sql`](supabase/migrations/0002_bannerghatta_beta_record.sql). It covers road segments, projects, agencies, contractors, deadlines, events, sources, verification, future works, road-cutting permissions, financial records, official updates, citizen evidence, and revision history.
 
-[`supabase/seed_bannerghatta_beta.sql`](supabase/seed_bannerghatta_beta.sql) is the idempotent Beta v1 data import. The site reads the published `NAG-BAN-001` record through the RLS-protected `get_nagara_public_record` RPC. A local static copy remains only as a continuity fallback if the public database is temporarily unreachable.
+[`supabase/seed_bannerghatta_beta.sql`](supabase/seed_bannerghatta_beta.sql) is the idempotent Beta v1 data import. The public site first queries the RLS-protected `projects` register, then reads the selected project through `get_nagara_public_record`. Project links are shareable with `?project=<project-slug>`. A local static copy of `NAG-BAN-001` remains only as a continuity fallback if the public database is temporarily unreachable; other projects are never replaced by invented fallback values.
+
+The connected production database currently publishes six Bannerghatta Road records: the BWSSB sewer-work history, the BSCC restoration tender, the announced end-to-end white-topping project, current asphalt/patchwork activity, footpath clearance, and the Sarakki utility-cut restoration. Adding another published `NAG-BAN-*` project makes it appear in the frontend project register without a code change.
 
 ## Verification boundary
 
