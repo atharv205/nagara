@@ -5,10 +5,12 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("ships Nagara's four-part public record", async () => {
-  const [page, layout, schema] = await Promise.all([
+  const [page, layout, schema, analytics, analyticsMigration] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/layout.tsx", root), "utf8"),
     readFile(new URL("supabase/migrations/0001_nagara_core.sql", root), "utf8"),
+    readFile(new URL("lib/analytics.ts", root), "utf8"),
+    readFile(new URL("supabase/migrations/0003_anonymous_product_analytics.sql", root), "utf8"),
   ]);
 
   assert.match(layout, /A public memory for Bengaluru/);
@@ -23,4 +25,11 @@ test("ships Nagara's four-part public record", async () => {
   assert.match(schema, /create table public\.road_segments/i);
   assert.match(schema, /create table public\.projects/i);
   assert.match(schema, /enable row level security/i);
+  assert.match(page, /trackSourceOpen/);
+  assert.match(page, /section_view/);
+  assert.match(analytics, /sessionStorage/);
+  assert.match(analytics, /navigator\.doNotTrack/);
+  assert.match(analyticsMigration, /create table public\.analytics_events/i);
+  assert.match(analyticsMigration, /grant insert on table public\.analytics_events to anon, authenticated/i);
+  assert.match(analyticsMigration, /revoke all on table public\.analytics_events from public, anon, authenticated/i);
 });

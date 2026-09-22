@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { trackEvent, trackEventOnce } from "@/lib/analytics";
 import { getPublicSupabaseClient } from "@/lib/supabase/public";
 
 type SourceClass = string;
@@ -409,7 +410,15 @@ function EvidenceTag({ status }: { status: EvidenceLevel }) {
   return <span className={item.className}>{item.label}</span>;
 }
 
-function SourceLinks({ ids, sourceList }: { ids: string[]; sourceList: SourceRef[] }) {
+function SourceLinks({
+  ids,
+  sourceList,
+  onOpen,
+}: {
+  ids: string[];
+  sourceList: SourceRef[];
+  onOpen?: (source: SourceRef) => void;
+}) {
   if (!ids.length) return <span className="muted">No source located</span>;
   return (
     <span className="source-inline">
@@ -419,7 +428,15 @@ function SourceLinks({ ids, sourceList }: { ids: string[]; sourceList: SourceRef
         return (
           <span key={id}>
             {index > 0 && ", "}
-            <a href={source.url} target="_blank" rel="noreferrer">
+            <a
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen?.(source);
+              }}
+            >
               {source.id.toUpperCase()}
             </a>
           </span>
@@ -452,6 +469,12 @@ export default function Home() {
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackEventOnce("page-view", "page_view", {
+      properties: { entry_point: "site" },
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -554,6 +577,42 @@ export default function Home() {
   }, [selectedProjectCode]);
 
   useEffect(() => {
+    if (dataOrigin === "loading") return;
+    trackEventOnce(`project-view:${selectedProjectCode}`, "project_view", {
+      projectCode: selectedProjectCode,
+    });
+  }, [dataOrigin, selectedProjectCode]);
+
+  useEffect(() => {
+    if (dataOrigin === "loading" || typeof IntersectionObserver === "undefined") return;
+
+    const sections = ["intro", "projects", "why", "history", "record", "verification"]
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const sectionId = (entry.target as HTMLElement).id;
+          trackEventOnce(
+            `section-view:${selectedProjectCode}:${sectionId}`,
+            "section_view",
+            {
+              projectCode: selectedProjectCode,
+              properties: { section_id: sectionId },
+            },
+          );
+        });
+      },
+      { threshold: 0.28 },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [dataOrigin, selectedProjectCode]);
+
+  useEffect(() => {
     const handleHistoryChange = () => {
       const requestedProject = new URLSearchParams(window.location.search).get("project");
       const match = projectIndex.find(
@@ -628,6 +687,13 @@ export default function Home() {
   const missingFieldCount = fields.filter((field) => field.status === "missing").length;
 
   const selectProject = (project: ProjectIndexItem) => {
+    trackEvent("project_selected", {
+      projectCode: project.project_code,
+      properties: {
+        from_project: selectedProjectCode,
+        to_project: project.project_code,
+      },
+    });
     setDataOrigin("loading");
     setDataError(null);
     setExpandedField(null);
@@ -652,6 +718,10 @@ export default function Home() {
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
+      trackEvent("share_record", {
+        projectCode: selectedProjectCode,
+        properties: { target: "clipboard" },
+      });
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -659,19 +729,36 @@ export default function Home() {
     }
   };
 
+  const trackSourceOpen = (source: SourceRef) => {
+    trackEvent("source_opened", {
+      projectCode: selectedProjectCode,
+      properties: {
+        source_id: source.id,
+        source_publisher: source.publisher,
+      },
+    });
+  };
+
+  const trackNavigation = (target: string) => {
+    trackEvent("navigation_click", {
+      projectCode: selectedProjectCode,
+      properties: { target },
+    });
+  };
+
   return (
     <main>
       <header className="topbar">
-        <a className="wordmark" href="#intro" aria-label="Nagara home">
+        <a className="wordmark" href="#intro" aria-label="Nagara home" onClick={() => trackNavigation("intro")}>
           <span lang="kn">ನಗರ</span>
           <span>NAGARA</span>
         </a>
         <nav aria-label="Page sections">
-          <a href="#intro">01 / CASE</a>
-          <a href="#projects">PROJECTS</a>
-          <a href="#history">02 / HISTORY</a>
-          <a href="#record">03 / RECORD</a>
-          <a href="#verification">04 / SOURCES</a>
+          <a href="#intro" onClick={() => trackNavigation("intro")}>01 / CASE</a>
+          <a href="#projects" onClick={() => trackNavigation("projects")}>PROJECTS</a>
+          <a href="#history" onClick={() => trackNavigation("history")}>02 / HISTORY</a>
+          <a href="#record" onClick={() => trackNavigation("record")}>03 / RECORD</a>
+          <a href="#verification" onClick={() => trackNavigation("verification")}>04 / SOURCES</a>
         </nav>
         <button className="quiet-action" type="button" onClick={copyLink}>
           {copied ? "LINK COPIED" : "SHARE RECORD"}
@@ -699,10 +786,10 @@ export default function Home() {
               not accusations.
             </p>
             <div className="hero-actions">
-              <a className="text-action" href="#history">
+              <a className="text-action" href="#history" onClick={() => trackNavigation("history")}>
                 READ THE BANNERGHATTA RECORD <span>↓</span>
               </a>
-              <a className="text-action secondary" href="#verification">
+              <a className="text-action secondary" href="#verification" onClick={() => trackNavigation("verification")}>
                 SEE EVERY SOURCE <span>→</span>
               </a>
             </div>
@@ -762,7 +849,7 @@ export default function Home() {
         {dataError && <p className="data-error" role="status">{dataError}</p>}
       </section>
 
-      <section className="chapter why-chapter" aria-labelledby="why-title">
+      <section id="why" className="chapter why-chapter" aria-labelledby="why-title">
         <div className="chapter-label">WHY THIS CORRIDOR</div>
         <div className="why-grid">
           <div>
@@ -829,7 +916,7 @@ export default function Home() {
               <div><dt>RESTORATION</dt><dd>{formatStatus(selectedProject.restoration_status)}</dd></div>
               <div><dt>LAST OFFICIAL UPDATE</dt><dd>{formatRecordDate(selectedProject.latest_official_update_on)}</dd></div>
             </dl>
-            <a href="#projects">CHANGE PROJECT ↑</a>
+            <a href="#projects" onClick={() => trackNavigation("projects")}>CHANGE PROJECT ↑</a>
           </aside>
           <div className="timeline-area">
             <div className="filter-row" aria-label="Filter timeline evidence">
@@ -844,7 +931,13 @@ export default function Home() {
                   key={value}
                   type="button"
                   className={timelineFilter === value ? "filter active" : "filter"}
-                  onClick={() => setTimelineFilter(value)}
+                  onClick={() => {
+                    setTimelineFilter(value);
+                    trackEvent("timeline_filter", {
+                      projectCode: selectedProjectCode,
+                      properties: { filter_value: value },
+                    });
+                  }}
                 >
                   {label}
                 </button>
@@ -858,7 +951,7 @@ export default function Home() {
                     <strong>{event.date}</strong>
                   </div>
                   <div className="timeline-content">
-                    <div className="event-topline"><EvidenceTag status={event.evidence} /><SourceLinks ids={event.sources} sourceList={sources} /></div>
+                    <div className="event-topline"><EvidenceTag status={event.evidence} /><SourceLinks ids={event.sources} sourceList={sources} onOpen={trackSourceOpen} /></div>
                     <h3>{event.title}</h3>
                     <p>{event.body}</p>
                   </div>
@@ -902,7 +995,13 @@ export default function Home() {
                 type="button"
                 key={value}
                 className={dataFilter === value ? "filter active" : "filter"}
-                onClick={() => setDataFilter(value)}
+                onClick={() => {
+                  setDataFilter(value);
+                  trackEvent("record_filter", {
+                    projectCode: selectedProjectCode,
+                    properties: { filter_value: value },
+                  });
+                }}
               >
                 {label}
               </button>
@@ -922,11 +1021,19 @@ export default function Home() {
                       className={isExpanded ? "field-row expanded" : "field-row"}
                       key={field.field}
                       type="button"
-                      onClick={() => setExpandedField(isExpanded ? null : field.field)}
+                      onClick={() => {
+                        setExpandedField(isExpanded ? null : field.field);
+                        if (!isExpanded) {
+                          trackEvent("record_field_expanded", {
+                            projectCode: selectedProjectCode,
+                            properties: { field_name: field.field },
+                          });
+                        }
+                      }}
                     >
                       <span className="field-name">{field.field}</span>
                       <span className="field-value">{field.value}</span>
-                      <span className="field-proof"><EvidenceTag status={field.status} /><SourceLinks ids={field.sourceIds} sourceList={sources} /></span>
+                      <span className="field-proof"><EvidenceTag status={field.status} /><SourceLinks ids={field.sourceIds} sourceList={sources} onOpen={trackSourceOpen} /></span>
                       <span className="field-chevron" aria-hidden="true">{isExpanded ? "−" : "+"}</span>
                       {isExpanded && <span className="field-detail">{field.detail}</span>}
                     </button>
@@ -979,7 +1086,13 @@ export default function Home() {
               <button
                 key={value}
                 className={sourceFilter === value ? "filter active" : "filter"}
-                onClick={() => setSourceFilter(value)}
+                onClick={() => {
+                  setSourceFilter(value);
+                  trackEvent("source_filter", {
+                    projectCode: selectedProjectCode,
+                    properties: { filter_value: value },
+                  });
+                }}
                 type="button"
               >
                 {value === "all" ? "ALL" : value.toUpperCase()}
@@ -995,7 +1108,13 @@ export default function Home() {
                 <p className="source-meta">{source.sourceClass} · {source.publisher} · {source.date}</p>
                 <h3>{source.title}</h3>
                 <p>{source.note}</p>
-                <a href={source.url} target="_blank" rel="noreferrer" className="source-link">
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="source-link"
+                  onClick={() => trackSourceOpen(source)}
+                >
                   OPEN ORIGINAL {source.hasPhotos ? "ARTICLE / PHOTO EVIDENCE" : "SOURCE"} ↗
                 </a>
               </div>
@@ -1025,8 +1144,11 @@ export default function Home() {
 
       <footer>
         <div className="footer-wordmark"><span lang="kn">ನಗರ</span> NAGARA</div>
-        <p>{recordProject.code} is an evidence-led public record, not a final administrative finding.</p>
-        <a href="#intro">BACK TO TOP ↑</a>
+        <p>
+          {recordProject.code} is an evidence-led public record, not a final administrative finding.
+          <span className="analytics-disclosure">Anonymous interaction counts help improve Nagara. No names, email addresses or precise location are collected.</span>
+        </p>
+        <a href="#intro" onClick={() => trackNavigation("intro")}>BACK TO TOP ↑</a>
       </footer>
     </main>
   );
