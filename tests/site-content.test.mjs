@@ -22,6 +22,11 @@ test("ships Nagara's four-part public record", async () => {
   assert.match(page, /\.from\("projects"\)/);
   assert.match(page, /p_project_code: selectedProjectCode/);
   assert.match(page, /Bannerghatta Road project register/);
+  assert.match(page, /ರಸ್ತೆ ಅಂದ್ರೆ ಈಗ ಹೇಗಿದೆ ಅನ್ನೋದು ಮಾತ್ರ ಅಲ್ಲ/);
+  assert.match(page, /ಬನ್ನೇರುಘಟ್ಟ ರಸ್ತೆ ನೋಡಿದ್ರೆ <strong>ನಗರ<\/strong>/);
+  assert.match(page, /ರಸ್ತೆಯ ದಾಖಲೆ/);
+  assert.match(page, /ಯೋಜನೆಯ ದಾಖಲೆ/);
+  assert.match(page, /ಮಾಹಿತಿ ಇಲ್ಲದ ಜಾಗವನ್ನು ಕೋಪದಿಂದ ತುಂಬೋದು ನಮ್ಮ ಉದ್ದೇಶ ಅಲ್ಲ/);
   assert.match(schema, /create table public\.road_segments/i);
   assert.match(schema, /create table public\.projects/i);
   assert.match(schema, /enable row level security/i);

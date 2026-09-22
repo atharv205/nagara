@@ -775,11 +775,13 @@ export default function Home() {
         <div className="chapter-label">01 — THE CASE FOR A PUBLIC RECORD</div>
         <div className="hero-grid">
           <div className="hero-copy">
-            <p className="eyebrow">BENGALURU’S INFRASTRUCTURE MEMORY</p>
             <h1>
               A road is more than
               <em> its latest condition.</em>
             </h1>
+            <p className="hero-kannada" lang="kn">
+              ರಸ್ತೆ ಅಂದ್ರೆ ಈಗ ಹೇಗಿದೆ ಅನ್ನೋದು ಮಾತ್ರ ಅಲ್ಲ.
+            </p>
             <p className="lede">
               Nagara connects the scattered record behind public works: who did the work,
               what was promised, what changed, and what comes next. It records evidence —
@@ -855,6 +857,9 @@ export default function Home() {
           <div>
             <p className="eyebrow">ONE CORRIDOR, MANY HANDOFFS</p>
             <h2 id="why-title">Bannerghatta Road shows the gap Nagara is built to close.</h2>
+            <p className="why-kannada" lang="kn">
+              ಬನ್ನೇರುಘಟ್ಟ ರಸ್ತೆ ನೋಡಿದ್ರೆ <strong>ನಗರ</strong> ಯಾಕೆ ಬೇಕು ಅನ್ನೋದು ಗೊತ್ತಾಗುತ್ತೆ.
+            </p>
           </div>
           <div className="why-copy">
             <p>
@@ -870,24 +875,30 @@ export default function Home() {
         </div>
         <div className="road-memory" aria-label="Nagara road memory concept">
           <div className="memory-head">
-            <span className="section-kicker">NAGARA ROAD MEMORY</span>
-            <span>PAST · NOW · NEXT</span>
+            <span className="section-kicker">NAGARA ROAD MEMORY · <b lang="kn">ರಸ್ತೆಯ ದಾಖಲೆ</b></span>
+            <span>PAST · NOW · NEXT&nbsp;&nbsp; / &nbsp;&nbsp;<b lang="kn">ಹಿಂದೆ · ಈಗ · ಮುಂದೆ</b></span>
           </div>
           <div className="memory-grid">
             <article>
-              <p>PAST</p>
+              <p>PAST · <b lang="kn">ಹಿಂದೆ</b></p>
               <h3>What changed?</h3>
+              <h4 lang="kn">ಏನು ಆಯ್ತು?</h4>
               <span>Excavation, restoration, deadline changes and handoffs stay visible.</span>
+              <span className="memory-kannada" lang="kn">ಅಗೆತ, ರಿಪೇರಿ, ಬದಲಾದ ಗಡುವು—ಎಲ್ಲವೂ ದಾಖಲಾಗುತ್ತೆ.</span>
             </article>
             <article>
-              <p>NOW</p>
+              <p>NOW · <b lang="kn">ಈಗ</b></p>
               <h3>Who owns the work?</h3>
+              <h4 lang="kn">ಕೆಲಸ ಯಾರ ಹೊಣೆ?</h4>
               <span>Agency, scope, current status and evidence are shown separately.</span>
+              <span className="memory-kannada" lang="kn">ಯಾವ ಸಂಸ್ಥೆ ಹೊಣೆ, ಕೆಲಸದ ಸ್ಥಿತಿ ಏನು—ಸ್ಪಷ್ಟವಾಗಿ ಕಾಣುತ್ತೆ.</span>
             </article>
             <article>
-              <p>NEXT</p>
+              <p>NEXT · <b lang="kn">ಮುಂದೆ</b></p>
               <h3>What may affect the road next?</h3>
+              <h4 lang="kn">ಮುಂದೆ ಇನ್ನೇನು ಕೆಲಸ ಬರಬಹುದು?</h4>
               <span>Published tenders, permissions and plans become a coordination watch.</span>
+              <span className="memory-kannada" lang="kn">ಪ್ರಕಟವಾದ ಮುಂದಿನ ಕೆಲಸಗಳು ಒಂದೇ ಜಾಗದಲ್ಲಿ ಕಾಣುತ್ತವೆ.</span>
             </article>
           </div>
         </div>
@@ -964,11 +975,14 @@ export default function Home() {
       </section>
 
       <section id="record" className="chapter record-chapter">
-        <div className="chapter-label">03 — PROJECT RECORD</div>
+        <div className="chapter-label">03 — PROJECT RECORD · <span lang="kn">ಯೋಜನೆಯ ದಾಖಲೆ</span></div>
         <div className="record-title-row">
           <div>
             <p className="eyebrow">{recordProject.code} / LIVE RESEARCH RECORD</p>
             <h2>Every field has a source — or a visible gap.</h2>
+            <p className="record-kannada" lang="kn">
+              ಪ್ರತಿ ಮಾಹಿತಿಗೂ ಮೂಲ ತೋರಿಸುತ್ತೇವೆ — ಮಾಹಿತಿ ಸಿಗದಿದ್ದರೆ ಅದನ್ನೂ ಸ್ಪಷ್ಟವಾಗಿ ಹೇಳುತ್ತೇವೆ.
+            </p>
           </div>
           <div className="record-status">
             <span>{dataOrigin === "live" ? "LIVE DATABASE RECORD" : dataOrigin === "loading" ? "CONNECTING TO RECORD" : "RESEARCH SNAPSHOT"}</span>
@@ -977,14 +991,14 @@ export default function Home() {
         </div>
 
         <div className="record-scoreboard">
-          <div><span>IDENTIFIED</span><strong>{availableFieldCount}</strong><small>project facts with evidence</small></div>
-          <div><span>OPEN GAPS</span><strong>{missingFieldCount}</strong><small>fields not publicly located</small></div>
-          <div><span>ASSUMPTIONS</span><strong>0</strong><small>never substituted for evidence</small></div>
-          <div><span>SOURCES</span><strong>{sources.length}</strong><small>linked directly to this public record</small></div>
+          <div><span>IDENTIFIED · <b lang="kn">ಸಿಕ್ಕ ಮಾಹಿತಿ</b></span><strong>{availableFieldCount}</strong><small>project facts with evidence</small></div>
+          <div><span>OPEN GAPS · <b lang="kn">ಇನ್ನೂ ಸಿಗದ ಮಾಹಿತಿ</b></span><strong>{missingFieldCount}</strong><small>fields not publicly located</small></div>
+          <div><span>ASSUMPTIONS · <b lang="kn">ಊಹೆಗಳು</b></span><strong>0</strong><small>never substituted for evidence</small></div>
+          <div><span>SOURCES · <b lang="kn">ಮೂಲಗಳು</b></span><strong>{sources.length}</strong><small>linked directly to this public record</small></div>
         </div>
 
         <div className="data-toolbar">
-          <p>FILTER THE RECORD</p>
+          <p>FILTER THE RECORD · <b lang="kn">ಮಾಹಿತಿ ಹುಡುಕಿ</b></p>
           <div>
             {([
               ["all", "ALL FIELDS"],
@@ -1136,9 +1150,10 @@ export default function Home() {
         </div>
 
         <div className="close-statement">
-          <p>THE POINT IS NOT TO FILL THE GAPS WITH ANGER.</p>
+          <p lang="kn">ಮಾಹಿತಿ ಇಲ್ಲದ ಜಾಗವನ್ನು ಕೋಪದಿಂದ ತುಂಬೋದು ನಮ್ಮ ಉದ್ದೇಶ ಅಲ್ಲ.</p>
           <h2>It is to make the gaps impossible to quietly forget.</h2>
-          <span>People. Projects. Accountability.</span>
+          <h3 lang="kn">ಆ ಖಾಲಿ ಜಾಗಗಳು ಸುಮ್ಮನೆ ಮರೆತು ಹೋಗದಂತೆ ಮಾಡೋದೇ ನಮ್ಮ ಉದ್ದೇಶ.</h3>
+          <span>People. Projects. Accountability. <b lang="kn">ಜನರು. ಯೋಜನೆಗಳು. ಜವಾಬ್ದಾರಿ.</b></span>
         </div>
       </section>
 
