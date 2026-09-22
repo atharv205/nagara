@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { trackEvent, trackEventOnce } from "@/lib/analytics";
 import { getPublicSupabaseClient } from "@/lib/supabase/public";
 
@@ -51,6 +51,15 @@ type ProjectIndexItem = {
   latest_official_update_on: string | null;
   timeline_note: string | null;
 };
+
+const pageSections = [
+  { id: "intro", label: "CASE", labelKn: "ಪರಿಚಯ" },
+  { id: "projects", label: "PROJECTS", labelKn: "ಯೋಜನೆಗಳು" },
+  { id: "why", label: "WHY", labelKn: "ಯಾಕೆ" },
+  { id: "history", label: "HISTORY", labelKn: "ಹಿಂದಿನ ದಾಖಲೆ" },
+  { id: "record", label: "RECORD", labelKn: "ದಾಖಲೆ" },
+  { id: "verification", label: "SOURCES", labelKn: "ಮೂಲಗಳು" },
+] as const;
 
 const fallbackProject: ProjectIndexItem = {
   project_code: "NAG-BAN-001",
@@ -469,6 +478,7 @@ export default function Home() {
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<(typeof pageSections)[number]["id"]>("intro");
 
   useEffect(() => {
     trackEventOnce("page-view", "page_view", {
@@ -613,6 +623,39 @@ export default function Home() {
   }, [dataOrigin, selectedProjectCode]);
 
   useEffect(() => {
+    let framePending = false;
+
+    const updateActiveSection = () => {
+      if (framePending) return;
+      framePending = true;
+
+      window.requestAnimationFrame(() => {
+        const readingLine = Math.min(window.innerHeight * 0.32, 280);
+        let nextSection: (typeof pageSections)[number]["id"] = "intro";
+
+        pageSections.forEach(({ id }) => {
+          const section = document.getElementById(id);
+          if (section && section.getBoundingClientRect().top <= readingLine) {
+            nextSection = id;
+          }
+        });
+
+        setActiveSection((current) => current === nextSection ? current : nextSection);
+        framePending = false;
+      });
+    };
+
+    updateActiveSection();
+    window.addEventListener("scroll", updateActiveSection, { passive: true });
+    window.addEventListener("resize", updateActiveSection);
+
+    return () => {
+      window.removeEventListener("scroll", updateActiveSection);
+      window.removeEventListener("resize", updateActiveSection);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleHistoryChange = () => {
       const requestedProject = new URLSearchParams(window.location.search).get("project");
       const match = projectIndex.find(
@@ -746,6 +789,12 @@ export default function Home() {
     });
   };
 
+  const activeSectionIndex = Math.max(
+    0,
+    pageSections.findIndex(({ id }) => id === activeSection),
+  );
+  const sectionProgress = ((activeSectionIndex + 1) / pageSections.length) * 100;
+
   return (
     <main>
       <header className="topbar">
@@ -764,6 +813,35 @@ export default function Home() {
           {copied ? "LINK COPIED" : "SHARE RECORD"}
         </button>
       </header>
+
+      <nav
+        className="section-scroller"
+        aria-label="Jump through this Nagara record"
+        style={{ "--scroll-progress": `${sectionProgress}%` } as CSSProperties}
+      >
+        <div className="scroller-meta">
+          <span>PAGE INDEX</span>
+          <strong>{String(activeSectionIndex + 1).padStart(2, "0")} / {String(pageSections.length).padStart(2, "0")}</strong>
+        </div>
+        <div className="scroller-links">
+          <span className="scroller-progress" aria-hidden="true"><i /></span>
+          {pageSections.map((section, index) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              className={activeSection === section.id ? "active" : undefined}
+              aria-current={activeSection === section.id ? "location" : undefined}
+              onClick={() => trackNavigation(`section_scroller_${section.id}`)}
+            >
+              <small>{String(index + 1).padStart(2, "0")}</small>
+              <span className="scroller-label">
+                {section.label}
+                <b lang="kn">{section.labelKn}</b>
+              </span>
+            </a>
+          ))}
+        </div>
+      </nav>
 
       <section id="intro" className="chapter hero-chapter">
         <div className="brick-field" aria-hidden="true">

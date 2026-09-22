@@ -27,6 +27,9 @@ test("ships Nagara's four-part public record", async () => {
   assert.match(page, /ರಸ್ತೆಯ ದಾಖಲೆ/);
   assert.match(page, /ಯೋಜನೆಯ ದಾಖಲೆ/);
   assert.match(page, /ಮಾಹಿತಿ ಇಲ್ಲದ ಜಾಗವನ್ನು ಕೋಪದಿಂದ ತುಂಬೋದು ನಮ್ಮ ಉದ್ದೇಶ ಅಲ್ಲ/);
+  assert.match(page, /className="section-scroller"/);
+  assert.match(page, /section_scroller_/);
+  assert.match(page, /--scroll-progress/);
   assert.match(schema, /create table public\.road_segments/i);
   assert.match(schema, /create table public\.projects/i);
   assert.match(schema, /enable row level security/i);
