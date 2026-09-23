@@ -829,7 +829,6 @@ export default function Home() {
     0,
     pageSections.findIndex(({ id }) => id === activeSection),
   );
-  const activeSectionData = pageSections[activeSectionIndex];
   const sectionProgress = ((activeSectionIndex + 1) / pageSections.length) * 100;
 
   return (
@@ -856,18 +855,8 @@ export default function Home() {
         aria-label="Jump through this Nagara record"
         style={{
           "--scroll-progress": `${sectionProgress}%`,
-          "--active-position": `${((activeSectionIndex + 0.5) / pageSections.length) * 100}%`,
         } as CSSProperties}
       >
-        <div className="scroller-meta">
-          <span className="scroller-current-number">
-            {String(activeSectionIndex + 1).padStart(2, "0")} / {String(pageSections.length).padStart(2, "0")}
-          </span>
-          <span className="scroller-current-title" key={activeSectionData.id}>
-            <strong>{activeSectionData.title}</strong>
-            <b lang="kn">{activeSectionData.titleKn}</b>
-          </span>
-        </div>
         <div className="scroller-links">
           <span className="scroller-progress" aria-hidden="true"><i /></span>
           {pageSections.map((section, index) => (
@@ -879,6 +868,15 @@ export default function Home() {
               aria-current={activeSection === section.id ? "location" : undefined}
               onClick={() => trackNavigation(`section_scroller_${section.id}`)}
             >
+              <span className="scroller-meta" aria-hidden="true">
+                <span className="scroller-current-number">
+                  {String(index + 1).padStart(2, "0")} / {String(pageSections.length).padStart(2, "0")}
+                </span>
+                <span className="scroller-current-title">
+                  <strong>{section.title}</strong>
+                  <b lang="kn">{section.titleKn}</b>
+                </span>
+              </span>
               <span className="scroller-node" aria-hidden="true" />
               <small>{String(index + 1).padStart(2, "0")}</small>
               <span className="scroller-label">

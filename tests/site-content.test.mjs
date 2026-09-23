@@ -30,7 +30,6 @@ test("ships Nagara's four-part public record", async () => {
   assert.match(page, /className="section-scroller"/);
   assert.match(page, /section_scroller_/);
   assert.match(page, /--scroll-progress/);
-  assert.match(page, /activeSectionData/);
   assert.match(page, /scroller-current-title/);
   assert.match(page, /ಮಾಹಿತಿ ಪರಿಶೀಲನೆ/);
   assert.match(schema, /create table public\.road_segments/i);
