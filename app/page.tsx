@@ -854,7 +854,10 @@ export default function Home() {
       <nav
         className="section-scroller"
         aria-label="Jump through this Nagara record"
-        style={{ "--scroll-progress": `${sectionProgress}%` } as CSSProperties}
+        style={{
+          "--scroll-progress": `${sectionProgress}%`,
+          "--active-position": `${((activeSectionIndex + 0.5) / pageSections.length) * 100}%`,
+        } as CSSProperties}
       >
         <div className="scroller-meta">
           <span className="scroller-current-number">
@@ -872,9 +875,11 @@ export default function Home() {
               key={section.id}
               href={`#${section.id}`}
               className={activeSection === section.id ? "active" : undefined}
+              aria-label={`${String(index + 1).padStart(2, "0")} — ${section.title} — ${section.titleKn}`}
               aria-current={activeSection === section.id ? "location" : undefined}
               onClick={() => trackNavigation(`section_scroller_${section.id}`)}
             >
+              <span className="scroller-node" aria-hidden="true" />
               <small>{String(index + 1).padStart(2, "0")}</small>
               <span className="scroller-label">
                 {section.label}
