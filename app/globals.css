@@ -74,8 +74,9 @@ button { cursor: pointer; }
   transform: translateY(-50%);
   backdrop-filter: blur(8px);
 }
-.scroller-meta { position: absolute; top: var(--active-position); right: calc(100% + 12px); width: 232px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 11px; padding: 11px 13px; color: var(--paper); background: rgba(24,32,30,.96); border-right: 3px solid var(--mustard); box-shadow: 0 9px 24px rgba(24,17,14,.16); transform: translateY(-50%); transition: top .22s ease; }
+.scroller-meta { position: absolute; top: var(--active-position); right: calc(100% + 12px); width: 232px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 11px; padding: 11px 13px; color: var(--paper); background: rgba(24,32,30,.96); border-right: 3px solid var(--mustard); box-shadow: 0 9px 24px rgba(24,17,14,.16); opacity: 0; visibility: hidden; pointer-events: none; transform: translate(8px, -50%); transition: top .22s ease, opacity .16s ease, transform .16s ease, visibility .16s; }
 .scroller-meta::after { position: absolute; content: ""; top: 50%; right: -9px; width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 7px solid var(--mustard); transform: translateY(-50%); }
+.section-scroller:hover .scroller-meta, .section-scroller:focus-within .scroller-meta { opacity: 1; visibility: visible; transform: translate(0, -50%); }
 .scroller-current-number { color: var(--mustard); font-size: 7px; font-weight: 800; letter-spacing: .08em; white-space: nowrap; }
 .scroller-current-title { display: flex; min-width: 0; flex-direction: column; color: var(--paper); font-weight: 800; line-height: 1.12; }
 .scroller-current-title strong { overflow: hidden; font-size: 8px; letter-spacing: .08em; text-overflow: ellipsis; white-space: nowrap; }
