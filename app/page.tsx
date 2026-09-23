@@ -53,12 +53,48 @@ type ProjectIndexItem = {
 };
 
 const pageSections = [
-  { id: "intro", label: "CASE", labelKn: "ಪರಿಚಯ" },
-  { id: "projects", label: "PROJECTS", labelKn: "ಯೋಜನೆಗಳು" },
-  { id: "why", label: "WHY", labelKn: "ಯಾಕೆ" },
-  { id: "history", label: "HISTORY", labelKn: "ಹಿಂದಿನ ದಾಖಲೆ" },
-  { id: "record", label: "RECORD", labelKn: "ದಾಖಲೆ" },
-  { id: "verification", label: "SOURCES", labelKn: "ಮೂಲಗಳು" },
+  {
+    id: "intro",
+    label: "CASE",
+    labelKn: "ಪರಿಚಯ",
+    title: "THE CASE FOR A PUBLIC RECORD",
+    titleKn: "ಈ ದಾಖಲೆ ಯಾಕೆ ಬೇಕು",
+  },
+  {
+    id: "projects",
+    label: "PROJECTS",
+    labelKn: "ಯೋಜನೆಗಳು",
+    title: "BANNERGHATTA ROAD PROJECTS",
+    titleKn: "ಬನ್ನೇರುಘಟ್ಟ ರಸ್ತೆ ಯೋಜನೆಗಳು",
+  },
+  {
+    id: "why",
+    label: "WHY",
+    labelKn: "ಯಾಕೆ",
+    title: "WHY THIS CORRIDOR",
+    titleKn: "ಈ ರಸ್ತೆ ಯಾಕೆ",
+  },
+  {
+    id: "history",
+    label: "HISTORY",
+    labelKn: "ಹಿಂದಿನ ದಾಖಲೆ",
+    title: "EXCAVATION HISTORY",
+    titleKn: "ಅಗೆತದ ಹಿಂದಿನ ದಾಖಲೆ",
+  },
+  {
+    id: "record",
+    label: "RECORD",
+    labelKn: "ದಾಖಲೆ",
+    title: "PROJECT RECORD",
+    titleKn: "ಯೋಜನೆಯ ದಾಖಲೆ",
+  },
+  {
+    id: "verification",
+    label: "SOURCES",
+    labelKn: "ಮೂಲಗಳು",
+    title: "DATA VERIFICATION",
+    titleKn: "ಮಾಹಿತಿ ಪರಿಶೀಲನೆ",
+  },
 ] as const;
 
 const fallbackProject: ProjectIndexItem = {
@@ -793,6 +829,7 @@ export default function Home() {
     0,
     pageSections.findIndex(({ id }) => id === activeSection),
   );
+  const activeSectionData = pageSections[activeSectionIndex];
   const sectionProgress = ((activeSectionIndex + 1) / pageSections.length) * 100;
 
   return (
@@ -820,8 +857,13 @@ export default function Home() {
         style={{ "--scroll-progress": `${sectionProgress}%` } as CSSProperties}
       >
         <div className="scroller-meta">
-          <span>PAGE INDEX</span>
-          <strong>{String(activeSectionIndex + 1).padStart(2, "0")} / {String(pageSections.length).padStart(2, "0")}</strong>
+          <span className="scroller-current-number">
+            {String(activeSectionIndex + 1).padStart(2, "0")} / {String(pageSections.length).padStart(2, "0")}
+          </span>
+          <span className="scroller-current-title" key={activeSectionData.id}>
+            <strong>{activeSectionData.title}</strong>
+            <b lang="kn">{activeSectionData.titleKn}</b>
+          </span>
         </div>
         <div className="scroller-links">
           <span className="scroller-progress" aria-hidden="true"><i /></span>
