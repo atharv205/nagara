@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { trackEvent, trackEventOnce } from "@/lib/analytics";
 import { getPublicSupabaseClient } from "@/lib/supabase/public";
+import Feedback from "./feedback";
 
 type SourceClass = string;
 
@@ -94,6 +95,13 @@ const pageSections = [
     labelKn: "ಮೂಲಗಳು",
     title: "DATA VERIFICATION",
     titleKn: "ಮಾಹಿತಿ ಪರಿಶೀಲನೆ",
+  },
+  {
+    id: "feedback",
+    label: "FEEDBACK",
+    labelKn: "ಅಭಿಪ್ರಾಯ",
+    title: "YOUR FEEDBACK",
+    titleKn: "ನಿಮ್ಮ ಅಭಿಪ್ರಾಯ",
   },
 ] as const;
 
@@ -515,6 +523,17 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<(typeof pageSections)[number]["id"]>("intro");
+  const feedbackAnchorApplied = useRef(false);
+
+  useEffect(() => {
+    if (dataOrigin === "loading" || feedbackAnchorApplied.current) return;
+    feedbackAnchorApplied.current = true;
+    // Loading the live record changes the height above the form. Restore a
+    // direct feedback link once, after that content has settled.
+    if (window.location.hash === "#feedback") {
+      window.requestAnimationFrame(() => document.getElementById("feedback")?.scrollIntoView({ behavior: "instant" }));
+    }
+  }, [dataOrigin]);
 
   useEffect(() => {
     trackEventOnce("page-view", "page_view", {
@@ -632,8 +651,8 @@ export default function Home() {
   useEffect(() => {
     if (dataOrigin === "loading" || typeof IntersectionObserver === "undefined") return;
 
-    const sections = ["intro", "projects", "why", "history", "record", "verification"]
-      .map((id) => document.getElementById(id))
+    const sections = pageSections
+      .map(({ id }) => document.getElementById(id))
       .filter((section): section is HTMLElement => Boolean(section));
 
     const observer = new IntersectionObserver(
@@ -840,10 +859,11 @@ export default function Home() {
         </a>
         <nav aria-label="Page sections">
           <a href="#intro" onClick={() => trackNavigation("intro")}>01 / CASE</a>
-          <a href="#projects" onClick={() => trackNavigation("projects")}>PROJECTS</a>
-          <a href="#history" onClick={() => trackNavigation("history")}>02 / HISTORY</a>
-          <a href="#record" onClick={() => trackNavigation("record")}>03 / RECORD</a>
-          <a href="#verification" onClick={() => trackNavigation("verification")}>04 / SOURCES</a>
+          <a href="#projects" onClick={() => trackNavigation("projects")}>02 / PROJECTS</a>
+          <a href="#history" onClick={() => trackNavigation("history")}>03 / HISTORY</a>
+          <a href="#record" onClick={() => trackNavigation("record")}>04 / RECORD</a>
+          <a href="#verification" onClick={() => trackNavigation("verification")}>05 / SOURCES</a>
+          <a href="#feedback" onClick={() => trackNavigation("feedback")}>06 / FEEDBACK</a>
         </nav>
         <button className="quiet-action" type="button" onClick={copyLink}>
           {copied ? "LINK COPIED" : "SHARE RECORD"}
@@ -855,6 +875,7 @@ export default function Home() {
         aria-label="Jump through this Nagara record"
         style={{
           "--scroll-progress": `${sectionProgress}%`,
+          "--section-count": pageSections.length,
         } as CSSProperties}
       >
         <div className="scroller-links">
@@ -1028,7 +1049,7 @@ export default function Home() {
       </section>
 
       <section id="history" className="chapter history-chapter">
-        <div className="chapter-label">02 — EXCAVATION HISTORY</div>
+        <div className="chapter-label">03 — EXCAVATION HISTORY</div>
         <div className="section-intro">
           <div>
             <p className="eyebrow">{recordProject.code} / {formatStatus(recordProject.status)}</p>
@@ -1098,7 +1119,7 @@ export default function Home() {
       </section>
 
       <section id="record" className="chapter record-chapter">
-        <div className="chapter-label">03 — PROJECT RECORD · <span lang="kn">ಯೋಜನೆಯ ದಾಖಲೆ</span></div>
+        <div className="chapter-label">04 — PROJECT RECORD · <span lang="kn">ಯೋಜನೆಯ ದಾಖಲೆ</span></div>
         <div className="record-title-row">
           <div>
             <p className="eyebrow">{recordProject.code} / LIVE RESEARCH RECORD</p>
@@ -1197,7 +1218,7 @@ export default function Home() {
       </section>
 
       <section id="verification" className="chapter verification-chapter">
-        <div className="chapter-label">04 — DATA VERIFICATION</div>
+        <div className="chapter-label">05 — DATA VERIFICATION</div>
         <div className="verification-title">
           <div>
             <p className="eyebrow">PROVENANCE, NOT JUST ASSERTION</p>
@@ -1280,11 +1301,13 @@ export default function Home() {
         </div>
       </section>
 
+      <Feedback projectCode={selectedProjectCode} projectTitle={selectedProject.title} />
+
       <footer>
         <div className="footer-wordmark"><span lang="kn">ನಗರ</span> NAGARA</div>
         <p>
           {recordProject.code} is an evidence-led public record, not a final administrative finding.
-          <span className="analytics-disclosure">Anonymous interaction counts help improve Nagara. No names, email addresses or precise location are collected.</span>
+          <span className="analytics-disclosure">Anonymous interaction counts help improve Nagara. Analytics do not collect names, email addresses or precise location. Feedback you choose to send is saved separately and privately.</span>
         </p>
         <a href="#intro" onClick={() => trackNavigation("intro")}>BACK TO TOP ↑</a>
       </footer>

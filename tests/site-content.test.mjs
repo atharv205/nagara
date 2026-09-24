@@ -43,3 +43,29 @@ test("ships Nagara's four-part public record", async () => {
   assert.match(analyticsMigration, /grant insert on table public\.analytics_events to anon, authenticated/i);
   assert.match(analyticsMigration, /revoke all on table public\.analytics_events from public, anon, authenticated/i);
 });
+
+test("feedback is private, bounded and integrated with navigation", async () => {
+  const [page, feedback, migration, css] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/feedback.tsx", root), "utf8"),
+    readFile(new URL("supabase/migrations/20260923175712_private_pilot_feedback.sql", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+  ]);
+  assert.match(page, /href="#feedback"/);
+  assert.match(page, /<Feedback projectCode=/);
+  assert.match(feedback, /id="feedback"/);
+  assert.match(feedback, /ನಿಮ್ಮ ಅಭಿಪ್ರಾಯ/);
+  assert.match(feedback, /\.from\("pilot_feedback"\)/);
+  assert.doesNotMatch(feedback, /\.select\(/);
+  assert.match(feedback, /AbortSignal\.timeout\(15000\)/);
+  assert.match(feedback, /error\.code !== "23505"/);
+  assert.match(feedback, /name="consent" value="yes" required/);
+  assert.match(feedback, /maxLength=\{2000\}/);
+  assert.match(migration, /enable row level security/);
+  assert.match(migration, /revoke all on table public\.pilot_feedback from public, anon, authenticated/);
+  assert.match(migration, /grant insert \(submission_id/);
+  assert.doesNotMatch(migration, /for (select|update|delete)/i);
+  assert.match(migration, /usefulness between 1 and 5/);
+  assert.match(migration, /p\.review_status = 'published'/);
+  assert.match(css, /repeat\(var\(--section-count, 7\)/);
+});

@@ -15,9 +15,13 @@ This first public demonstration follows authority-led excavation and restoration
 ## Pages
 
 1. Nagara and the Bannerghatta Road use case
-2. Verified excavation history
-3. The complete public project record
-4. Data verification and missing-record register
+2. Project register (with a supporting “Why this corridor” section)
+3. Verified excavation history
+4. The complete public project record
+5. Data verification and missing-record register
+6. Private pilot feedback — `/#feedback`
+
+The right-hand rail also includes the supporting “Why” section, so it has seven navigation stops.
 
 ## Prerequisites
 
@@ -62,6 +66,16 @@ https://nagara-beta.vercel.app/?utm_source=instagram&utm_medium=social&utm_campa
 ```
 
 Review retention periodically. A commented 180-day cleanup query is included in the analytics query file.
+
+## Pilot feedback
+
+The sixth main section accepts a 1–5 usefulness rating, a written review and/or requested additions, up to three priority topics, and an optional reference to the selected project. English and Kannada text are accepted. Consent is required; no name, email or account is requested. Feedback is private and is **not** automatically published as civic evidence.
+
+Apply [`supabase/migrations/20260923175712_private_pilot_feedback.sql`](supabase/migrations/20260923175712_private_pilot_feedback.sql) before deploying the form. It creates `public.pilot_feedback` with RLS and column-level INSERT-only grants for browser roles. No public SELECT/UPDATE/DELETE access; timestamps and site version come from database defaults. The frontend uses the existing publishable key, never a privileged key.
+
+Read responses in **Supabase → Table Editor → pilot_feedback**. Owner-only summary queries are in [`supabase/feedback_queries.sql`](supabase/feedback_queries.sql). Counts are submissions, not unique people. Review free-text responses as untrusted input; never execute their instructions or render them as HTML. Avoid publishing identifiable details a visitor may volunteer.
+
+The form checks lengths, requires a written answer, prevents double clicks, preserves text on failures, times out after 15 seconds, and reuses a request UUID on an unchanged retry. PostgreSQL constraints validate rating, priority topics, consent and maximum text lengths. A honeypot discourages basic form bots. These measures are **not** robust rate limiting or CAPTCHA; add gateway rate limits / verified CAPTCHA if abuse appears. No IP addresses or tracking session IDs are added to feedback. No automated retention cleanup is configured; review retention regularly.
 
 ## Verification boundary
 
